@@ -7,6 +7,7 @@ evaluated lazily and degrade gracefully when unavailable.
 """
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -35,6 +36,13 @@ async def _batch_job_safe() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+
+    log.info(
+        "app_lifespan_starting",
+        port=os.environ.get("PORT", "not set"),
+        database_configured=bool(settings.DATABASE_URL),
+        setup_complete=settings.setup_complete,
+    )
 
     if not settings.setup_complete:
         log.warning(

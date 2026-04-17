@@ -4,7 +4,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,11 +16,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Anthropic
-    ANTHROPIC_API_KEY: str
+    # Anthropic — empty default so the app can still boot on first deploy.
+    # Features that need Anthropic will fail at call-time, not at import-time.
+    ANTHROPIC_API_KEY: str = ""
 
-    # AgentMail
-    AGENTMAIL_API_KEY: str
+    # AgentMail — same rationale as ANTHROPIC_API_KEY.
+    AGENTMAIL_API_KEY: str = ""
     AGENTMAIL_INBOX_ADDRESS: str = "elaxtra@agentmail.to"
     AGENTMAIL_WEBHOOK_SECRET: str = ""
 
@@ -39,7 +40,23 @@ class Settings(BaseSettings):
     SIGNER_TITLE: str = "Partner, Elaxtra Advisors"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://elaxtra:changeme@localhost:5432/outreach"
+    DATABASE_URL: str = "postgresql+asyncpg://localhost/outreach"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_database_url(cls, v: str) -> str:
+        """Railway provides postgresql:// but asyncpg needs postgresql+asyncpg://.
+
+        Also tolerates the legacy `postgres://` scheme (Heroku-style).
+        Empty strings fall back to the default (so the app can still boot).
+        """
+        if not v:
+            return "postgresql+asyncpg://localhost/outreach"
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
 
     # Rate limiting
     MAX_EMAILS_PER_DAY: int = 25
@@ -95,20 +112,6 @@ class Settings(BaseSettings):
             and self.ENVIRONMENT_ID
             and self.AGENTMAIL_INBOX_ID
         )
-
-    @property
-    def async_database_url(self) -> str:
-        """DATABASE_URL coerced to the asyncpg driver.
-
-        Railway's linked Postgres injects `postgresql://...`; SQLAlchemy's
-        async engine requires `postgresql+asyncpg://...`. Rewrite transparently.
-        """
-        url = self.DATABASE_URL
-        if url.startswith("postgresql://"):
-            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
-        elif url.startswith("postgres://"):  # legacy Heroku-style
-            url = "postgresql+asyncpg://" + url[len("postgres://"):]
-        return url
 
 
 @lru_cache(maxsize=1)
