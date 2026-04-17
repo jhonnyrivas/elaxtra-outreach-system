@@ -11,7 +11,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "alembic upgrade head && python -m src.main serve",
+    "startCommand": "(alembic upgrade head || echo 'alembic migration skipped — DB not reachable or not configured; /health will still serve') && python -m src.main serve",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

@@ -15,20 +15,5 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
-    build: .
-    command: python -m src.main serve
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://elaxtra:changeme@db:5432/outreach
-    ports:
-      - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./data:/app/data
-      - ./docs:/app/docs
-
 volumes:
   pgdata:

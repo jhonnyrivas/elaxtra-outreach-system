@@ -5,7 +5,9 @@ import asyncio
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
+from src.config import settings
 from src.utils.logging import get_logger
 from src.webhooks.handler import handle_bounce, handle_complaint, handle_incoming_reply
 from src.webhooks.verify import WebhookSignatureError, verify_webhook_signature
@@ -21,7 +23,7 @@ async def health() -> dict:
 
 
 @router.post("/webhooks/agentmail")
-async def agentmail_webhook(request: Request) -> dict:
+async def agentmail_webhook(request: Request):
     """Receives AgentMail webhook events.
 
     CRITICAL: return 200 immediately; queue processing on the event loop.
@@ -32,6 +34,13 @@ async def agentmail_webhook(request: Request) -> dict:
     the same request context — for long-running agent sessions we want to
     hand off to the event loop and let the response ship instantly.
     """
+    if not settings.setup_complete:
+        log.warning("webhook_rejected_setup_incomplete")
+        return JSONResponse(
+            status_code=503,
+            content={"error": "system not configured"},
+        )
+
     raw_body = await request.body()
     headers = {k.lower(): v for k, v in request.headers.items()}
 

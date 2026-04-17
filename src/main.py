@@ -31,10 +31,12 @@ def serve() -> None:
     """
     import os
 
-    port = int(os.environ.get("PORT") or settings.WEBHOOK_PORT or 8000)
+    port = int(os.environ.get("PORT", os.environ.get("WEBHOOK_PORT", "8000")))
+    host = os.environ.get("HOST", settings.WEBHOOK_HOST)
+    log.info("server_binding", host=host, port=port)
     uvicorn.run(
         "src.app:app",
-        host=settings.WEBHOOK_HOST,
+        host=host,
         port=port,
         log_config=None,  # we configure our own
     )

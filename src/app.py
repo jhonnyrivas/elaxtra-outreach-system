@@ -1,4 +1,10 @@
-"""FastAPI app factory. Mounts webhook routes and wires startup/shutdown."""
+"""FastAPI app factory. Mounts webhook routes and wires startup/shutdown.
+
+The HTTP server MUST always boot so that platform health checks (e.g. Railway
+at /health) succeed. Features that depend on external state (agent IDs from
+setup, database connectivity, company profile PDF, contacts Excel) are
+evaluated lazily and degrade gracefully when unavailable.
+"""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -7,7 +13,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 
-from src.agents.orchestrator import run_outreach_batch
 from src.config import settings
 from src.db.engine import dispose_engine
 from src.utils.logging import configure_logging, get_logger
@@ -20,6 +25,8 @@ _scheduler: AsyncIOScheduler | None = None
 
 async def _batch_job_safe() -> None:
     try:
+        from src.agents.orchestrator import run_outreach_batch
+
         await run_outreach_batch()
     except Exception:
         log.exception("scheduled_batch_failed")
@@ -28,32 +35,40 @@ async def _batch_job_safe() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+
     if not settings.setup_complete:
         log.warning(
             "setup_not_complete",
-            hint="Run `python -m src.main setup` to create agents, vault, and environment.",
+            hint="Run `python -m src.main setup` to create agents, vault, and environment. "
+                 "The HTTP server will still serve /health; the scheduler is disabled until setup runs.",
         )
+    else:
+        global _scheduler
+        try:
+            _scheduler = AsyncIOScheduler(timezone=settings.OUTREACH_TIMEZONE)
+            _scheduler.add_job(
+                _batch_job_safe,
+                trigger=CronTrigger(
+                    hour=settings.OUTREACH_CRON_HOUR,
+                    day_of_week=settings.OUTREACH_CRON_DAY_OF_WEEK,
+                    timezone=settings.OUTREACH_TIMEZONE,
+                ),
+                id="outreach_batch",
+                name="Outreach batch",
+                replace_existing=True,
+            )
+            _scheduler.start()
+            log.info(
+                "scheduler_started",
+                cron_hours=settings.OUTREACH_CRON_HOUR,
+                cron_days=settings.OUTREACH_CRON_DAY_OF_WEEK,
+            )
+        except Exception:
+            log.exception("scheduler_start_failed")
 
-    # Start scheduler
-    global _scheduler
-    _scheduler = AsyncIOScheduler(timezone=settings.OUTREACH_TIMEZONE)
-    _scheduler.add_job(
-        _batch_job_safe,
-        trigger=CronTrigger(
-            hour=settings.OUTREACH_CRON_HOUR,
-            day_of_week=settings.OUTREACH_CRON_DAY_OF_WEEK,
-            timezone=settings.OUTREACH_TIMEZONE,
-        ),
-        id="outreach_batch",
-        name="Outreach batch",
-        replace_existing=True,
-    )
-    _scheduler.start()
     log.info(
         "system_started",
-        webhook_port=settings.WEBHOOK_PORT,
-        cron_hours=settings.OUTREACH_CRON_HOUR,
-        cron_days=settings.OUTREACH_CRON_DAY_OF_WEEK,
+        setup_complete=settings.setup_complete,
         dry_run=settings.DRY_RUN,
     )
 
@@ -61,8 +76,14 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         if _scheduler:
-            _scheduler.shutdown(wait=False)
-        await dispose_engine()
+            try:
+                _scheduler.shutdown(wait=False)
+            except Exception:
+                log.exception("scheduler_shutdown_failed")
+        try:
+            await dispose_engine()
+        except Exception:
+            log.exception("engine_dispose_failed")
         log.info("system_stopped")
 
 
