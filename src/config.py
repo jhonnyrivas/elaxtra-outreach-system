@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # Anthropic — empty default so the app can still boot on first deploy.
     # Features that need Anthropic will fail at call-time, not at import-time.
+    # Set ANTHROPIC_API_KEY via .env locally or Railway Variables in prod.
     ANTHROPIC_API_KEY: str = ""
 
     # AgentMail — same rationale as ANTHROPIC_API_KEY.
