@@ -21,7 +21,7 @@ def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         _engine = create_async_engine(
-            settings.DATABASE_URL,
+            settings.async_database_url,
             pool_pre_ping=True,
             pool_size=10,
             max_overflow=10,

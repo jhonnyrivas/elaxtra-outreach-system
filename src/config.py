@@ -96,6 +96,20 @@ class Settings(BaseSettings):
             and self.AGENTMAIL_INBOX_ID
         )
 
+    @property
+    def async_database_url(self) -> str:
+        """DATABASE_URL coerced to the asyncpg driver.
+
+        Railway's linked Postgres injects `postgresql://...`; SQLAlchemy's
+        async engine requires `postgresql+asyncpg://...`. Rewrite transparently.
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+        elif url.startswith("postgres://"):  # legacy Heroku-style
+            url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        return url
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
