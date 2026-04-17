@@ -22,11 +22,12 @@ FROM base AS runtime
 COPY --from=builder /install /usr/local
 COPY . .
 
-RUN useradd --create-home --uid 1000 app \
+RUN chmod +x /app/entrypoint.sh \
+ && useradd --create-home --uid 1000 app \
  && chown -R app:app /app
 USER app
 
 # Railway injects $PORT at runtime; locally we default to 8000 via WEBHOOK_PORT.
 EXPOSE 8000
 
-CMD ["python", "-m", "src.main", "serve"]
+CMD ["./entrypoint.sh"]

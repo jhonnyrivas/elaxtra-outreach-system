@@ -1,20 +1,13 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "./Dockerfile",
-    "watchPatterns": [
-      "src/**",
-      "pyproject.toml",
-      "Dockerfile",
-      "alembic/**"
-    ]
-  },
-  "deploy": {
-    "startCommand": "(alembic upgrade head || echo 'alembic migration skipped — DB not reachable or not configured; /health will still serve') && python -m src.main serve",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 30,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
+    "$schema": "https://railway.app/railway.schema.json",
+    "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "./Dockerfile"
+    },
+    "deploy": {
+        "healthcheckPath": "/health",
+        "healthcheckTimeout": 30,
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 3
+    }
 }
