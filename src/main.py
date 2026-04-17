@@ -33,12 +33,25 @@ def serve() -> None:
 
     port = int(os.environ.get("PORT", os.environ.get("WEBHOOK_PORT", "8000")))
     host = os.environ.get("WEBHOOK_HOST", "0.0.0.0")
-    log.info("server_binding", host=host, port=port)
+
+    # Plain prints go straight to stdout unbuffered — bypasses structlog so we
+    # can always see them in Railway logs even if JSON logging misbehaves.
+    print(f"[serve] resolved host={host} port={port}", flush=True)
+    print("[serve] importing src.app:app ...", flush=True)
+    try:
+        from src.app import app as _app  # probe import before uvicorn.run
+        print(f"[serve] import OK: {_app}", flush=True)
+    except Exception as e:
+        print(f"[serve] FATAL import error: {e!r}", flush=True)
+        import traceback
+        traceback.print_exc()
+        raise
+
+    print(f"[serve] launching uvicorn on {host}:{port}", flush=True)
     uvicorn.run(
         "src.app:app",
         host=host,
         port=port,
-        log_config=None,  # we configure our own
     )
 
 
