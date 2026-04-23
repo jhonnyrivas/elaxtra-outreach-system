@@ -34,20 +34,23 @@ def serve() -> None:
     port = int(os.environ.get("PORT", os.environ.get("WEBHOOK_PORT", "8000")))
     host = os.environ.get("WEBHOOK_HOST", "0.0.0.0")
 
-    # Plain prints go straight to stdout unbuffered — bypasses structlog so we
-    # can always see them in Railway logs even if JSON logging misbehaves.
-    print(f"[serve] resolved host={host} port={port}", flush=True)
-    print("[serve] importing src.app:app ...", flush=True)
+    # Diagnostics go to stderr so Railway's Deploy Logs (which surface stderr
+    # reliably) always captures them, even if stdout is buffered/filtered.
+    def _diag(msg: str) -> None:
+        print(msg, file=sys.stderr, flush=True)
+
+    _diag(f"[serve] resolved host={host} port={port}")
+    _diag("[serve] importing src.app:app ...")
     try:
         from src.app import app as _app  # probe import before uvicorn.run
-        print(f"[serve] import OK: {_app}", flush=True)
+        _diag(f"[serve] import OK: {_app}")
     except Exception as e:
-        print(f"[serve] FATAL import error: {e!r}", flush=True)
+        _diag(f"[serve] FATAL import error: {e!r}")
         import traceback
-        traceback.print_exc()
+        traceback.print_exc(file=sys.stderr)
         raise
 
-    print(f"[serve] launching uvicorn on {host}:{port}", flush=True)
+    _diag(f"[serve] launching uvicorn on {host}:{port}")
     uvicorn.run(
         "src.app:app",
         host=host,
