@@ -1,0 +1,50 @@
+{% from "_macros.html" import status_pill, classification_pill, relative_time %}
+{% if contacts.rows %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="text-left px-4 py-3 font-medium">Company</th>
+          <th class="text-left px-4 py-3 font-medium">Contact</th>
+          <th class="text-left px-4 py-3 font-medium">Status</th>
+          <th class="text-left px-4 py-3 font-medium">Classification</th>
+          <th class="text-left px-4 py-3 font-medium">Country</th>
+          <th class="text-right px-4 py-3 font-medium">Last reply</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for c in contacts.rows %}
+        <tr class="hover:bg-slate-900/40">
+          <td class="px-4 py-3">
+            <div class="font-medium">{{ c.company_name }}</div>
+            {% if c.headcount %}<div class="text-xs text-slate-500">{{ c.headcount }} people</div>{% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <div>{{ c.contact_name }}</div>
+            <div class="mono text-xs text-slate-500">{{ c.contact_email }}</div>
+            {% if c.contact_role %}<div class="text-xs text-slate-500">{{ c.contact_role }}</div>{% endif %}
+          </td>
+          <td class="px-4 py-3">{{ status_pill(c.outreach_status) }}</td>
+          <td class="px-4 py-3">{{ classification_pill(c.reply_classification) }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ c.country or '—' }}</td>
+          <td class="px-4 py-3 text-right text-xs text-slate-400">{{ relative_time(c.last_reply_date) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if contacts.total > (contacts.offset + contacts.rows | length) %}
+    <div class="p-4 border-t border-slate-800 flex items-center justify-center">
+      <button
+        class="text-xs text-brand-400 hover:text-brand-300 px-3 py-1.5 rounded-md border border-slate-800 hover:border-brand-600"
+        hx-get="/dashboard/contacts/partial?offset={{ contacts.offset + contacts.limit }}&search={{ search or '' }}&append=1"
+        hx-target="#contacts-body"
+        hx-swap="beforeend"
+      >Load more</button>
+    </div>
+  {% endif %}
+{% else %}
+  <div class="p-6 text-sm text-slate-500">
+    {% if search %}No contacts match "{{ search }}".{% else %}No contacts yet. Run <code class="mono">python -m src.main import-contacts</code>.{% endif %}
+  </div>
+{% endif %}

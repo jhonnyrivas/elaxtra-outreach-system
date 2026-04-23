@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% from "_macros.html" import stat_card, status_pill, classification_pill, relative_time %}
+
+{% block title %}Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+{% block subtitle %}
+  <p class="text-sm text-slate-400 mt-0.5">
+    Autonomous B2B outreach for Elaxtra Advisors · managed by Anthropic Managed Agents + AgentMail
+  </p>
+{% endblock %}
+
+{% block content %}
+{% set snap = overview.snapshot %}
+{% set pipeline = snap.pipeline %}
+{% set counts = pipeline.contacts_by_status %}
+{% set rl = snap.rate_limit %}
+
+<!-- Top row: headline numbers -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+  {{ stat_card('Total contacts', pipeline.total_contacts, 'across all statuses', 'slate') }}
+  {{ stat_card('Interested', counts.get('INTERESTED', 0), 'ready to schedule calls', 'emerald') }}
+  {{ stat_card('Sent last 24h', snap.activity_last_24h.outbound_sends, 'outbound emails', 'brand') }}
+  {{ stat_card('Replies last 24h', snap.activity_last_24h.inbound_replies, 'inbound messages', 'sky') }}
+</section>
+
+<!-- Second row: pipeline + rate limit -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  <!-- Pipeline -->
+  <div class="card rounded-lg p-5 lg:col-span-2">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Pipeline</h2>
+      <span class="text-xs text-slate-500">contacts by outreach_status</span>
+    </div>
+    {% if counts %}
+      <div class="grid grid-cols-3 md:grid-cols-4 gap-3">
+        {% for status, count in counts.items() %}
+          <div class="rounded-md bg-slate-900/80 border border-slate-800 p-3">
+            <div class="text-2xl font-semibold">{{ count }}</div>
+            <div class="mt-1">{{ status_pill(status) }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-sm text-slate-500">No contacts yet. Import some: <code class="mono">python -m src.main import-contacts --file ./data/contacts.xlsx</code></div>
+    {% endif %}
+
+    {% if pipeline.contacts_by_reply_classification %}
+      <div class="mt-6 pt-5 border-t border-slate-800">
+        <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">Reply classifications</div>
+        <div class="flex flex-wrap gap-2">
+          {% for cls, count in pipeline.contacts_by_reply_classification.items() %}
+            <div class="flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-md px-3 py-1.5">
+              {{ classification_pill(cls) }} <span class="text-slate-300 font-medium">{{ count }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Rate limit -->
+  <div class="card rounded-lg p-5">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-4">Rate limit</h2>
+    <div class="space-y-4">
+      <div>
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>Today</span>
+          <span>{{ rl.max_per_day - rl.remaining_today }} / {{ rl.max_per_day }}</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2">
+          <div class="bg-brand-500 h-2 rounded-full" style="width: {{ (100 * (rl.max_per_day - rl.remaining_today) / rl.max_per_day) | round(0) if rl.max_per_day else 0 }}%"></div>
+        </div>
+      </div>
+      <div>
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span>This hour</span>
+          <span>{{ rl.max_per_hour - rl.remaining_this_hour }} / {{ rl.max_per_hour }}</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2">
+          <div class="bg-brand-500 h-2 rounded-full" style="width: {{ (100 * (rl.max_per_hour - rl.remaining_this_hour) / rl.max_per_hour) | round(0) if rl.max_per_hour else 0 }}%"></div>
+        </div>
+      </div>
+      <div class="pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-1">
+        <div><span class="text-slate-500">Dry-run:</span> {{ 'yes' if snap.config.dry_run else 'no' }}</div>
+        <div><span class="text-slate-500">BCC:</span> {{ snap.config.bcc_email }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Third row: agents + MCP preview -->
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="card rounded-lg p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Agents</h2>
+      <a href="/dashboard/agents" class="text-xs text-brand-400 hover:text-brand-300">View all →</a>
+    </div>
+    <div class="space-y-3">
+      {% for a in overview.agents_preview %}
+      <div class="flex items-start gap-3 py-2 border-b border-slate-800 last:border-0">
+        <div class="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center text-xs font-medium">{{ a.display[0] }}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="font-medium truncate">{{ a.display }}</div>
+            {% if a.live_status == 'ok' %}
+              <span class="pill bg-emerald-900/60 text-emerald-200">live</span>
+            {% elif a.live_status == 'unavailable' %}
+              <span class="pill bg-amber-900/60 text-amber-200">unreachable</span>
+            {% else %}
+              <span class="pill bg-slate-700 text-slate-300">not set</span>
+            {% endif %}
+          </div>
+          <div class="text-xs text-slate-400 mt-0.5">{{ a.role }}</div>
+          <div class="text-xs text-slate-500 mt-1 mono">{{ a.agent_id or 'not configured' }}{% if a.version %} · v{{ a.version }}{% endif %} · {{ a.model }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card rounded-lg p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">MCP servers</h2>
+      <a href="/dashboard/mcp" class="text-xs text-brand-400 hover:text-brand-300">View all →</a>
+    </div>
+    <div class="space-y-3">
+      {% for s in overview.mcp_preview %}
+      <div class="flex items-start gap-3 py-2 border-b border-slate-800 last:border-0">
+        <div class="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center text-xs font-medium">{{ s.name[0] | upper }}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium capitalize">{{ s.name }}</div>
+          <div class="text-xs text-slate-400 mt-0.5 truncate">{{ s.purpose }}</div>
+          <div class="text-xs text-slate-500 mt-1 mono truncate">{{ s.url }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- Recent activity preview -->
+<section class="card rounded-lg p-5">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent activity</h2>
+    <a href="/dashboard/activity" class="text-xs text-brand-400 hover:text-brand-300">View all →</a>
+  </div>
+  {% if overview.activity_preview %}
+    <ul class="divide-y divide-slate-800">
+      {% for e in overview.activity_preview %}
+        <li class="py-3 flex items-start gap-3">
+          {% if e.type == 'email_outbound' %}
+            <span class="w-7 h-7 rounded-md bg-blue-900/50 text-blue-200 flex items-center justify-center text-xs">↗</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm"><span class="text-slate-400">Sent to</span> <span class="font-medium">{{ e.contact_name }}</span> <span class="text-slate-500">at {{ e.company_name }}</span></div>
+              <div class="text-xs text-slate-400 mt-0.5 truncate">{{ e.subject }}</div>
+            </div>
+          {% elif e.type == 'email_inbound' %}
+            <span class="w-7 h-7 rounded-md bg-indigo-900/50 text-indigo-200 flex items-center justify-center text-xs">↘</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm"><span class="text-slate-400">Reply from</span> <span class="font-medium">{{ e.contact_name }}</span> {{ classification_pill(e.classification) }}</div>
+              <div class="text-xs text-slate-400 mt-0.5 truncate">{{ e.subject }}</div>
+            </div>
+          {% else %}
+            <span class="w-7 h-7 rounded-md bg-slate-800 text-slate-300 flex items-center justify-center text-xs">⚙</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm"><span class="text-slate-400">{{ e.agent_type | capitalize }} session</span> <span class="text-slate-500">{{ e.status | lower }}</span></div>
+              <div class="text-xs text-slate-500 mono truncate">{{ e.managed_session_id }}</div>
+            </div>
+          {% endif %}
+          <div class="text-xs text-slate-500 shrink-0">{{ relative_time(e.at) }}</div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="text-sm text-slate-500">No activity yet.</div>
+  {% endif %}
+</section>
+
+<!-- System card -->
+<section class="card rounded-lg p-5">
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-3">System</h2>
+  <dl class="grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-6 text-sm">
+    <div><dt class="text-xs text-slate-500">Public URL</dt><dd class="mono text-slate-300 truncate">{{ overview.public_url or 'not set' }}</dd></div>
+    <div><dt class="text-xs text-slate-500">Inbox</dt><dd class="mono text-slate-300">{{ overview.inbox_address }}</dd></div>
+    <div><dt class="text-xs text-slate-500">Setup complete</dt><dd>{{ 'Yes' if overview.setup_complete else 'No' }}</dd></div>
+    <div class="md:col-span-3"><dt class="text-xs text-slate-500">Assistant allowed senders</dt><dd class="mono text-slate-300">{{ overview.allowed_assistant_senders | join(', ') or 'none' }}</dd></div>
+  </dl>
+</section>
+
+{% endblock %}

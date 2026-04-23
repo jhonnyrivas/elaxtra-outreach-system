@@ -1,0 +1,54 @@
+{% from "_macros.html" import classification_pill, relative_time %}
+
+{% if activity %}
+  <ul class="divide-y divide-slate-800">
+    {% for e in activity %}
+      <li class="p-4 flex items-start gap-3 hover:bg-slate-900/40">
+        {% if e.type == 'email_outbound' %}
+          <span class="w-8 h-8 rounded-md bg-blue-900/50 text-blue-200 flex items-center justify-center text-sm shrink-0">↗</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm"><span class="text-slate-400">Outbound email →</span> <span class="font-medium">{{ e.contact_name }}</span> <span class="text-slate-500">at {{ e.company_name }}</span></div>
+            <div class="text-xs text-slate-400 mt-0.5 truncate">{{ e.subject }}</div>
+            <div class="mono text-xs text-slate-600 mt-1">{{ e.contact_email }}</div>
+          </div>
+        {% elif e.type == 'email_inbound' %}
+          <span class="w-8 h-8 rounded-md bg-indigo-900/50 text-indigo-200 flex items-center justify-center text-sm shrink-0">↘</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm flex items-center gap-2 flex-wrap">
+              <span class="text-slate-400">Inbound reply ←</span>
+              <span class="font-medium">{{ e.contact_name }}</span>
+              {{ classification_pill(e.classification) }}
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5 truncate">{{ e.subject }}</div>
+            <div class="mono text-xs text-slate-600 mt-1">{{ e.contact_email }}</div>
+          </div>
+        {% else %}
+          {% set agent_colors = {
+            'composer': 'bg-violet-900/50 text-violet-200',
+            'responder': 'bg-sky-900/50 text-sky-200',
+            'scheduler': 'bg-teal-900/50 text-teal-200',
+            'assistant': 'bg-amber-900/50 text-amber-200',
+          } %}
+          <span class="w-8 h-8 rounded-md {{ agent_colors.get(e.agent_type, 'bg-slate-800 text-slate-300') }} flex items-center justify-center text-sm shrink-0">⚙</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm">
+              <span class="capitalize font-medium">{{ e.agent_type }}</span>
+              <span class="text-slate-400">session</span>
+              <span class="pill bg-slate-800 text-slate-300 ml-1">{{ e.status }}</span>
+              {% if e.contact_name %}<span class="text-slate-500">· {{ e.contact_name }}</span>{% endif %}
+            </div>
+            <div class="mono text-xs text-slate-600 mt-1 truncate">{{ e.managed_session_id }}</div>
+            {% if e.tokens_input or e.tokens_output %}
+              <div class="text-xs text-slate-500 mt-1">
+                tokens in: {{ e.tokens_input or 0 }} · out: {{ e.tokens_output or 0 }}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+        <div class="text-xs text-slate-500 shrink-0">{{ relative_time(e.at) }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <div class="p-6 text-sm text-slate-500">No activity yet. Start a batch: <code class="mono">python -m src.main batch</code>, or send an email to the assistant.</div>
+{% endif %}

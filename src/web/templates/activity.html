@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import classification_pill, relative_time %}
+
+{% block title %}Activity{% endblock %}
+{% block page_title %}Activity{% endblock %}
+{% block subtitle %}
+  <p class="text-sm text-slate-400 mt-0.5">
+    Unified feed of every outbound send, inbound reply, and agent session. Newest first.
+  </p>
+{% endblock %}
+
+{% block content %}
+<section class="card rounded-lg">
+  <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent events</h2>
+    <button
+      class="text-xs text-brand-400 hover:text-brand-300 px-2 py-1 rounded border border-slate-800 hover:border-brand-600"
+      hx-get="/dashboard/activity/partial"
+      hx-target="#activity-list"
+      hx-swap="innerHTML"
+    >Refresh</button>
+  </div>
+
+  <div id="activity-list">
+    {% include "_activity_list.html" %}
+  </div>
+</section>
+{% endblock %}

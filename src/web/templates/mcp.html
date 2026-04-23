@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}MCP Servers{% endblock %}
+{% block page_title %}MCP Servers{% endblock %}
+{% block subtitle %}
+  <p class="text-sm text-slate-400 mt-0.5">
+    Model Context Protocol integrations. Each agent declares which MCP servers it may call;
+    credentials live in the vault.
+  </p>
+{% endblock %}
+
+{% block content %}
+<section class="space-y-4">
+  {% for s in servers %}
+  <div class="card rounded-lg p-5">
+    <div class="flex items-start justify-between gap-4">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h3 class="text-lg font-semibold capitalize">{{ s.name }}</h3>
+          <span class="pill bg-slate-800 text-slate-400">MCP</span>
+        </div>
+        <p class="text-sm text-slate-300 mt-1.5 max-w-3xl">{{ s.purpose }}</p>
+      </div>
+    </div>
+
+    <dl class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-y-3 gap-x-6 text-sm">
+      <div>
+        <dt class="text-xs text-slate-500">URL</dt>
+        <dd class="mono text-slate-300 break-all">{{ s.url }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs text-slate-500">Authentication</dt>
+        <dd class="text-slate-300">{{ s.auth }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs text-slate-500">Used by</dt>
+        <dd class="flex flex-wrap gap-1.5">
+          {% for agent in s.agents %}
+            <span class="pill bg-slate-800 text-slate-300">{{ agent }}</span>
+          {% endfor %}
+        </dd>
+      </div>
+    </dl>
+  </div>
+  {% else %}
+    <p class="text-slate-500">No MCP servers declared.</p>
+  {% endfor %}
+</section>
+
+<section class="card rounded-lg p-5 bg-slate-900/40">
+  <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">What is MCP?</h3>
+  <p class="text-sm text-slate-300 max-w-3xl">
+    The <span class="text-slate-100">Model Context Protocol</span> is Anthropic's open standard for
+    connecting AI models to external tools and data sources. Each of the agents above gets a
+    toolbox at session time: the URLs listed here. When an agent needs to look up contact
+    data or check a calendar, it issues a tool call through the MCP server and receives the
+    result. Credentials never live in the agent — they're kept in the vault and injected at
+    session start.
+  </p>
+</section>
+{% endblock %}

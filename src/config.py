@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     WEBHOOK_PORT: int = 8000
     PUBLIC_WEBHOOK_URL: str = ""
 
+    # Dashboard — if both are set, /dashboard requires HTTP Basic auth.
+    # If either is empty, the dashboard is open (intended for local dev).
+    DASHBOARD_USER: str = ""
+    DASHBOARD_PASSWORD: str = ""
+
     # Mode
     DRY_RUN: bool = False
     LOG_LEVEL: str = "INFO"

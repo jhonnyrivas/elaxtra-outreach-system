@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block page_title %}Agents{% endblock %}
+{% block subtitle %}
+  <p class="text-sm text-slate-400 mt-0.5">
+    Four Managed Agents orchestrate the outbound campaign, reply handling, and internal Q&A.
+  </p>
+{% endblock %}
+
+{% block content %}
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  {% for a in agents %}
+  <div class="card rounded-lg p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="text-lg font-semibold">{{ a.display }}</h3>
+          {% if a.live_status == 'ok' %}
+            <span class="pill bg-emerald-900/60 text-emerald-200">live</span>
+          {% elif a.live_status == 'unavailable' %}
+            <span class="pill bg-amber-900/60 text-amber-200">unreachable</span>
+          {% else %}
+            <span class="pill bg-slate-700 text-slate-300">not configured</span>
+          {% endif %}
+        </div>
+        <p class="text-sm text-slate-400 mt-1">{{ a.role }}</p>
+      </div>
+    </div>
+
+    <dl class="mt-4 grid grid-cols-2 gap-y-2 text-sm">
+      <dt class="text-xs text-slate-500">Agent ID</dt>
+      <dd class="mono text-slate-300 truncate">{{ a.agent_id or '—' }}</dd>
+      <dt class="text-xs text-slate-500">Version</dt>
+      <dd class="mono text-slate-300">{{ a.version or '—' }}</dd>
+      <dt class="text-xs text-slate-500">Model</dt>
+      <dd class="mono text-slate-300">{{ a.model }}</dd>
+    </dl>
+
+    {% if a.live_description %}
+      <div class="mt-4 pt-4 border-t border-slate-800">
+        <div class="text-xs text-slate-500 mb-1">Description</div>
+        <p class="text-sm text-slate-300">{{ a.live_description }}</p>
+      </div>
+    {% elif a.description %}
+      <div class="mt-4 pt-4 border-t border-slate-800">
+        <div class="text-xs text-slate-500 mb-1">Description (local config)</div>
+        <p class="text-sm text-slate-300">{{ a.description }}</p>
+      </div>
+    {% endif %}
+
+    <div class="mt-4 pt-4 border-t border-slate-800">
+      <div class="text-xs text-slate-500 mb-2">Tools</div>
+      <div class="flex flex-wrap gap-1.5">
+        {% for tool in a.tools %}
+          <span class="pill bg-slate-800 text-slate-300">{{ tool }}</span>
+        {% endfor %}
+        {% if not a.tools %}
+          <span class="text-xs text-slate-500">No tools declared.</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if a.mcp_servers %}
+    <div class="mt-4 pt-4 border-t border-slate-800">
+      <div class="text-xs text-slate-500 mb-2">MCP servers</div>
+      <ul class="space-y-1.5">
+        {% for s in a.mcp_servers %}
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <span class="capitalize font-medium">{{ s.name }}</span>
+            <span class="mono text-xs text-slate-500 truncate">{{ s.url }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+{% if not agents %}
+  <p class="text-slate-500">No agents configured. Run <code class="mono">python -m src.main setup</code>.</p>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+{% block page_title %}Contacts{% endblock %}
+{% block subtitle %}
+  <p class="text-sm text-slate-400 mt-0.5">{{ contacts.total }} contacts imported. Search by company, contact name, or email.</p>
+{% endblock %}
+
+{% block content %}
+<section class="card rounded-lg">
+  <div class="p-4 border-b border-slate-800">
+    <form hx-get="/dashboard/contacts/partial" hx-target="#contacts-body" hx-trigger="submit, keyup changed delay:300ms from:find input" hx-swap="innerHTML" class="flex items-center gap-3">
+      <input
+        name="search"
+        value="{{ search or '' }}"
+        placeholder="Search company, name, or email…"
+        class="flex-1 bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm placeholder-slate-500 focus:outline-none focus:border-brand-500"
+        type="search"
+      >
+      <div class="text-xs text-slate-500">{{ contacts.total }} total</div>
+    </form>
+  </div>
+
+  <div id="contacts-body">
+    {% include "_contacts_table.html" %}
+  </div>
+</section>
+{% endblock %}

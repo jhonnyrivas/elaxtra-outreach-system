@@ -17,6 +17,8 @@ from fastapi import FastAPI
 from src.config import settings
 from src.db.engine import dispose_engine
 from src.utils.logging import configure_logging, get_logger
+from src.web.routes import api_router as dashboard_api_router
+from src.web.routes import router as dashboard_router
 from src.webhooks.router import router as webhooks_router
 
 log = get_logger(__name__)
@@ -103,6 +105,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(webhooks_router)
+    app.include_router(dashboard_router)
+    app.include_router(dashboard_api_router)
     return app
 
 

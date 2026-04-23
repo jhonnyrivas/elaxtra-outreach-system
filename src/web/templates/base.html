@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Elaxtra Outreach{% endblock %} — Elaxtra</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50:'#eff6ff',100:'#dbeafe',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8' },
+        }
+      }
+    }
+  }
+</script>
+<style>
+  /* Subtle card glow on hover */
+  .card { background: rgba(30,41,59,0.6); border: 1px solid rgba(71,85,105,0.4); }
+  .card:hover { border-color: rgba(59,130,246,0.5); }
+  .pill { font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:500; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+</style>
+</head>
+<body class="h-full min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-60 shrink-0 bg-slate-900/80 border-r border-slate-800 flex flex-col">
+    <div class="px-5 py-5 border-b border-slate-800">
+      <div class="text-lg font-semibold tracking-tight">Elaxtra</div>
+      <div class="text-xs text-slate-400 mt-0.5">Outreach Control</div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1 text-sm">
+      {% set nav = [
+        ('overview','Overview','M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'),
+        ('agents','Agents','M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 5.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'),
+        ('mcp','MCP Servers','M13 10V3L4 14h7v7l9-11h-7z'),
+        ('activity','Activity','M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'),
+        ('contacts','Contacts','M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a3 3 0 015.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'),
+      ] %}
+      {% for key, label, path in nav %}
+        <a href="/dashboard/{{ key if key != 'overview' else '' }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-800/80 transition
+                  {% if active == key %}bg-slate-800 text-white{% else %}text-slate-300{% endif %}">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ path }}"></path></svg>
+          <span>{{ label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+    <div class="p-3 border-t border-slate-800 text-xs text-slate-500 space-y-1">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full {{ 'bg-emerald-500' if setup_complete else 'bg-amber-500' }}"></span>
+        {{ 'Setup complete' if setup_complete else 'Setup incomplete' }}
+      </div>
+      <div>{{ inbox_address or 'no inbox' }}</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 min-w-0">
+    <header class="sticky top-0 z-10 bg-slate-950/80 backdrop-blur border-b border-slate-800">
+      <div class="px-8 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold tracking-tight">{% block page_title %}{% endblock %}</h1>
+          {% block subtitle %}{% endblock %}
+        </div>
+        <div class="text-xs text-slate-500">{{ now_utc }}</div>
+      </div>
+    </header>
+    <div class="p-8 space-y-8">
+      {% block content %}{% endblock %}
+    </div>
+    <footer class="px-8 py-6 text-xs text-slate-600 border-t border-slate-900">
+      Elaxtra Outreach · internal
+    </footer>
+  </main>
+</body>
+</html>
