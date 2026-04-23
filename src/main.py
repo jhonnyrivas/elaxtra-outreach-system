@@ -78,6 +78,116 @@ def setup() -> None:
     click.echo("\nIDs written to .env — restart `serve` to pick them up.")
 
 
+@cli.command("verify-config")
+def verify_config_cmd() -> None:
+    """Hit every configured ID against its API to confirm it really exists.
+
+    Useful when something fails with a 404 and you suspect a key/workspace
+    mismatch between local and prod. Exits 0 if everything resolves, 1 if
+    anything is missing or unreachable.
+    """
+    import anthropic
+
+    from src.services.agentmail_client import get_agentmail_client
+
+    async def _run() -> bool:
+        ok = True
+        click.echo("=== Anthropic Managed Agents ===")
+        if not settings.ANTHROPIC_API_KEY:
+            click.echo("  [skip] ANTHROPIC_API_KEY not set")
+            return False
+
+        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+        async def check(label: str, coro) -> bool:
+            try:
+                res = await coro
+                name = getattr(res, "name", None) or getattr(res, "id", "ok")
+                click.echo(f"  ✅ {label}: {name}")
+                return True
+            except Exception as e:
+                click.echo(f"  ❌ {label}: {type(e).__name__} — {e}")
+                return False
+
+        checks = [
+            (
+                "Environment",
+                settings.ENVIRONMENT_ID,
+                lambda _id: client.beta.environments.retrieve(environment_id=_id),
+            ),
+            (
+                "Vault",
+                settings.VAULT_ID,
+                lambda _id: client.beta.vaults.retrieve(vault_id=_id),
+            ),
+            (
+                "Composer agent",
+                settings.COMPOSER_AGENT_ID,
+                lambda _id: client.beta.agents.retrieve(agent_id=_id),
+            ),
+            (
+                "Responder agent",
+                settings.RESPONDER_AGENT_ID,
+                lambda _id: client.beta.agents.retrieve(agent_id=_id),
+            ),
+            (
+                "Scheduler agent",
+                settings.SCHEDULER_AGENT_ID,
+                lambda _id: client.beta.agents.retrieve(agent_id=_id),
+            ),
+            (
+                "Assistant agent",
+                settings.ASSISTANT_AGENT_ID,
+                lambda _id: client.beta.agents.retrieve(agent_id=_id),
+            ),
+        ]
+        for label, value, factory in checks:
+            if not value:
+                click.echo(f"  ⚠️  {label}: not configured (empty)")
+                ok = False
+                continue
+            ok = (await check(f"{label} [{value}]", factory(value))) and ok
+
+        click.echo("\n=== AgentMail ===")
+        try:
+            am = get_agentmail_client()
+            resp = await am.raw.inboxes.list()
+            found = False
+            for inbox in getattr(resp, "inboxes", []) or []:
+                email = getattr(inbox, "email", None) or getattr(inbox, "address", None)
+                if email == settings.AGENTMAIL_INBOX_ADDRESS:
+                    click.echo(f"  ✅ Inbox: {email} (id={inbox.inbox_id})")
+                    if settings.AGENTMAIL_INBOX_ID != inbox.inbox_id:
+                        click.echo(
+                            f"  ⚠️  AGENTMAIL_INBOX_ID mismatch — .env has "
+                            f"{settings.AGENTMAIL_INBOX_ID!r}, API returned "
+                            f"{inbox.inbox_id!r}"
+                        )
+                        ok = False
+                    found = True
+                    break
+            if not found:
+                click.echo(
+                    f"  ❌ Inbox {settings.AGENTMAIL_INBOX_ADDRESS} not found "
+                    "under this API key"
+                )
+                ok = False
+        except Exception as e:
+            click.echo(f"  ❌ AgentMail list failed: {type(e).__name__} — {e}")
+            ok = False
+
+        return ok
+
+    ok = asyncio.run(_run())
+    click.echo("\nresult:", nl=False)
+    if ok:
+        click.echo(" ✅ all configured IDs resolve")
+        sys.exit(0)
+    else:
+        click.echo(" ❌ problems found (see above)")
+        sys.exit(1)
+
+
 @cli.command("setup-assistant")
 def setup_assistant_cmd() -> None:
     """Create (or reuse) the internal Assistant agent.
