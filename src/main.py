@@ -148,6 +148,27 @@ def verify_config_cmd() -> None:
                 continue
             ok = (await check(f"{label} [{value}]", factory(value))) and ok
 
+        # Company profile PDF — uploaded file referenced by every agent session.
+        if settings.COMPANY_PROFILE_FILE_ID:
+            try:
+                f = await client.beta.files.retrieve_metadata(
+                    file_id=settings.COMPANY_PROFILE_FILE_ID
+                )
+                click.echo(
+                    f"  ✅ Company profile PDF [{settings.COMPANY_PROFILE_FILE_ID}]: "
+                    f"{getattr(f, 'filename', 'ok')}"
+                )
+            except Exception as e:
+                click.echo(
+                    f"  ❌ Company profile PDF "
+                    f"[{settings.COMPANY_PROFILE_FILE_ID}]: "
+                    f"{type(e).__name__} — {e}"
+                )
+                ok = False
+        else:
+            click.echo("  ⚠️  Company profile PDF: not configured (empty)")
+            ok = False
+
         click.echo("\n=== AgentMail ===")
         try:
             am = get_agentmail_client()
