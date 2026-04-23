@@ -129,6 +129,101 @@ async def get_thread_history(
     return list(result.scalars().all())
 
 
+async def list_recent_inbound_replies(
+    session: AsyncSession, *, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Return the most recent INBOUND messages joined with contact info.
+
+    Used to answer "who replied this week / today" style questions.
+    """
+    result = await session.execute(
+        select(
+            EmailHistory.id,
+            EmailHistory.subject,
+            EmailHistory.classification,
+            EmailHistory.created_at,
+            Contact.contact_name,
+            Contact.contact_email,
+            Contact.company_name,
+            Contact.outreach_status,
+        )
+        .join(Contact, Contact.id == EmailHistory.contact_id)
+        .where(EmailHistory.direction == "INBOUND")
+        .order_by(EmailHistory.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "email_id": row.id,
+            "subject": row.subject,
+            "classification": row.classification,
+            "received_at": row.created_at.isoformat() if row.created_at else None,
+            "contact_name": row.contact_name,
+            "contact_email": row.contact_email,
+            "company_name": row.company_name,
+            "outreach_status": row.outreach_status,
+        }
+        for row in result.all()
+    ]
+
+
+async def list_recent_outbound_sends(
+    session: AsyncSession, *, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Return the most recent OUTBOUND messages joined with contact info."""
+    result = await session.execute(
+        select(
+            EmailHistory.id,
+            EmailHistory.subject,
+            EmailHistory.created_at,
+            Contact.contact_name,
+            Contact.contact_email,
+            Contact.company_name,
+            Contact.outreach_status,
+        )
+        .join(Contact, Contact.id == EmailHistory.contact_id)
+        .where(EmailHistory.direction == "OUTBOUND")
+        .order_by(EmailHistory.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "email_id": row.id,
+            "subject": row.subject,
+            "sent_at": row.created_at.isoformat() if row.created_at else None,
+            "contact_name": row.contact_name,
+            "contact_email": row.contact_email,
+            "company_name": row.company_name,
+            "outreach_status": row.outreach_status,
+        }
+        for row in result.all()
+    ]
+
+
+async def count_emails_by_direction_since(
+    session: AsyncSession, since: datetime
+) -> dict[str, int]:
+    """{'OUTBOUND': N, 'INBOUND': M} for emails recorded since a timestamp."""
+    result = await session.execute(
+        select(EmailHistory.direction, func.count(EmailHistory.id))
+        .where(EmailHistory.created_at >= since)
+        .group_by(EmailHistory.direction)
+    )
+    return {direction: int(count) for direction, count in result.all()}
+
+
+async def count_contacts_by_classification(
+    session: AsyncSession,
+) -> dict[str, int]:
+    """Count contacts grouped by their latest reply_classification."""
+    result = await session.execute(
+        select(Contact.reply_classification, func.count(Contact.id))
+        .where(Contact.reply_classification.is_not(None))
+        .group_by(Contact.reply_classification)
+    )
+    return {cls: int(count) for cls, count in result.all()}
+
+
 # ---------- Rate limiter ----------
 
 

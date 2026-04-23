@@ -78,6 +78,22 @@ def setup() -> None:
     click.echo("\nIDs written to .env — restart `serve` to pick them up.")
 
 
+@cli.command("setup-assistant")
+def setup_assistant_cmd() -> None:
+    """Create (or reuse) the internal Assistant agent.
+
+    Safe to run after the main `setup`. Writes ASSISTANT_AGENT_ID/VERSION
+    to .env so the webhook handler can route authorized inbound queries.
+    """
+    from src.agents.registry import ensure_assistant_agent
+
+    agent_id, version = asyncio.run(ensure_assistant_agent())
+    click.echo("✅ Assistant agent ready.")
+    click.echo(f"   ASSISTANT_AGENT_ID={agent_id}")
+    click.echo(f"   ASSISTANT_AGENT_VERSION={version}")
+    click.echo("\nCopy those to Railway Variables and redeploy.")
+
+
 @cli.command("update-agents")
 def update_agents_cmd() -> None:
     """Push current agent configs as new versions (bumps agent version numbers)."""

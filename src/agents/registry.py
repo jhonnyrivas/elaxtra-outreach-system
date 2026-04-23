@@ -18,6 +18,7 @@ from pathlib import Path
 
 import anthropic
 
+from src.agents.assistant import build_assistant_agent_config
 from src.agents.composer import build_composer_agent_config
 from src.agents.responder import build_responder_agent_config
 from src.agents.scheduler_agent import build_scheduler_agent_config
@@ -43,6 +44,8 @@ class SetupResult:
     responder_agent_version: str
     scheduler_agent_id: str
     scheduler_agent_version: str
+    assistant_agent_id: str
+    assistant_agent_version: str
     company_profile_file_id: str
     agentmail_inbox_id: str
 
@@ -195,6 +198,11 @@ async def initial_setup() -> SetupResult:
         existing_id=settings.SCHEDULER_AGENT_ID,
         config=build_scheduler_agent_config(),
     )
+    assistant_id, assistant_version = await _ensure_agent(
+        client,
+        existing_id=settings.ASSISTANT_AGENT_ID,
+        config=build_assistant_agent_config(),
+    )
 
     # Upload company profile PDF (skip if already uploaded and file still exists)
     if settings.COMPANY_PROFILE_FILE_ID:
@@ -219,6 +227,8 @@ async def initial_setup() -> SetupResult:
             "RESPONDER_AGENT_VERSION": responder_version,
             "SCHEDULER_AGENT_ID": scheduler_id,
             "SCHEDULER_AGENT_VERSION": scheduler_version,
+            "ASSISTANT_AGENT_ID": assistant_id,
+            "ASSISTANT_AGENT_VERSION": assistant_version,
             "COMPANY_PROFILE_FILE_ID": file_id,
             "AGENTMAIL_INBOX_ID": inbox_id,
         }
@@ -234,6 +244,8 @@ async def initial_setup() -> SetupResult:
         responder_agent_version=responder_version,
         scheduler_agent_id=scheduler_id,
         scheduler_agent_version=scheduler_version,
+        assistant_agent_id=assistant_id,
+        assistant_agent_version=assistant_version,
         company_profile_file_id=file_id,
         agentmail_inbox_id=inbox_id,
     )
@@ -276,14 +288,22 @@ async def update_agents() -> SetupResult:
     scheduler_id, scheduler_version = await _update_agent(
         client, settings.SCHEDULER_AGENT_ID, build_scheduler_agent_config()
     )
+    # Assistant is optional historically — only update if it's been created.
+    if settings.ASSISTANT_AGENT_ID:
+        assistant_id, assistant_version = await _update_agent(
+            client, settings.ASSISTANT_AGENT_ID, build_assistant_agent_config()
+        )
+    else:
+        assistant_id, assistant_version = "", ""
 
-    _write_env_updates(
-        {
-            "COMPOSER_AGENT_VERSION": composer_version,
-            "RESPONDER_AGENT_VERSION": responder_version,
-            "SCHEDULER_AGENT_VERSION": scheduler_version,
-        }
-    )
+    env_updates = {
+        "COMPOSER_AGENT_VERSION": composer_version,
+        "RESPONDER_AGENT_VERSION": responder_version,
+        "SCHEDULER_AGENT_VERSION": scheduler_version,
+    }
+    if assistant_version:
+        env_updates["ASSISTANT_AGENT_VERSION"] = assistant_version
+    _write_env_updates(env_updates)
 
     return SetupResult(
         environment_id=settings.ENVIRONMENT_ID,
@@ -294,9 +314,34 @@ async def update_agents() -> SetupResult:
         responder_agent_version=responder_version,
         scheduler_agent_id=scheduler_id,
         scheduler_agent_version=scheduler_version,
+        assistant_agent_id=assistant_id,
+        assistant_agent_version=assistant_version,
         company_profile_file_id=settings.COMPANY_PROFILE_FILE_ID,
         agentmail_inbox_id=settings.AGENTMAIL_INBOX_ID,
     )
+
+
+async def ensure_assistant_agent() -> tuple[str, str]:
+    """Create the Assistant agent (or reuse if already set in .env).
+
+    Used when setup was run before the Assistant existed. Safe to call
+    repeatedly — reuses if ASSISTANT_AGENT_ID is already persisted.
+    """
+    if not settings.ENVIRONMENT_ID:
+        raise RuntimeError("Run `setup` first — environment is required.")
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    assistant_id, assistant_version = await _ensure_agent(
+        client,
+        existing_id=settings.ASSISTANT_AGENT_ID,
+        config=build_assistant_agent_config(),
+    )
+    _write_env_updates(
+        {
+            "ASSISTANT_AGENT_ID": assistant_id,
+            "ASSISTANT_AGENT_VERSION": assistant_version,
+        }
+    )
+    return assistant_id, assistant_version
 
 
 async def add_mcp_credential(

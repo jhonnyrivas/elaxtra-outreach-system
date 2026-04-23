@@ -1,7 +1,8 @@
-"""Webhook background handlers — spawn responder/scheduler agent sessions."""
+"""Webhook background handlers — spawn responder/scheduler/assistant agent sessions."""
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -14,6 +15,7 @@ from src.db.engine import session_scope
 from src.services.agentmail_client import get_agentmail_client
 from src.services.excel import update_row_status
 from src.services.file_upload import company_profile_content_block
+from src.services.system_stats import build_system_snapshot
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -30,17 +32,42 @@ _STATUS_BY_CLASSIFICATION = {
 }
 
 
+_EMAIL_RE = re.compile(r"[\w\.\+\-]+@[\w\-]+(?:\.[\w\-]+)+")
+
+
+def _extract_sender_email(message: dict[str, Any]) -> str:
+    """Pull a bare email address out of the AgentMail `from` field.
+
+    AgentMail has delivered this in several shapes across SDK versions:
+      - "Andrew <andrew@x.com>"
+      - {"email": "andrew@x.com", "name": "Andrew"}
+      - ["andrew@x.com"]
+      - [{"email": "andrew@x.com"}]
+    """
+    raw: Any = message.get("from_") or message.get("from") or ""
+    if isinstance(raw, list) and raw:
+        raw = raw[0]
+    if isinstance(raw, dict):
+        raw = raw.get("email") or raw.get("address") or ""
+    if not isinstance(raw, str):
+        return ""
+    m = _EMAIL_RE.search(raw)
+    return m.group(0).lower() if m else raw.strip().lower()
+
+
 async def handle_incoming_reply(event_id: str, message: dict[str, Any]) -> None:
     """Process a message.received webhook event.
 
-    Flow: dedupe event → find contact by thread → run Responder agent →
-    send reply via AgentMail → update DB + Excel. If classification is
-    INTERESTED with next_action=SCHEDULE_CALL, trigger the Scheduler agent.
+    Routing:
+      1. Dedupe event.
+      2. Look up the contact by thread_id.
+         - Hit → Responder flow (classify + reply + maybe schedule).
+         - Miss → if the sender is in ASSISTANT_ALLOWED_SENDERS, route to
+           the Assistant agent; otherwise ignore silently.
     """
     thread_id = message.get("thread_id")
     incoming_message_id = message.get("message_id")
-    from_addrs = message.get("from_") or message.get("from") or []
-    sender_email = (from_addrs[0] if isinstance(from_addrs, list) else from_addrs) or ""
+    sender_email = _extract_sender_email(message)
 
     # Idempotency — atomic insert-or-skip
     async with session_scope() as session:
@@ -63,8 +90,32 @@ async def handle_incoming_reply(event_id: str, message: dict[str, Any]) -> None:
         contact = await q.get_contact_by_thread_id(session, thread_id)
 
     if not contact:
+        # Unknown thread. If the sender is an authorized internal user,
+        # treat this as an assistant inquiry instead of ignoring it.
+        if sender_email in settings.assistant_allowed_senders:
+            if not settings.ASSISTANT_AGENT_ID:
+                log.warning(
+                    "assistant_agent_not_configured",
+                    event_id=event_id,
+                    sender=sender_email,
+                    hint="Run `python -m src.main setup-assistant`.",
+                )
+                return
+            log.info(
+                "assistant_inquiry_routed",
+                event_id=event_id,
+                thread_id=thread_id,
+                sender=sender_email,
+            )
+            await handle_assistant_inquiry(
+                thread_id=thread_id,
+                incoming_message_id=incoming_message_id,
+                sender_email=sender_email,
+                message=message,
+            )
+            return
         log.info(
-            "webhook_unknown_thread",
+            "webhook_unknown_thread_ignored",
             event_id=event_id,
             thread_id=thread_id,
             sender=sender_email,
@@ -277,6 +328,109 @@ async def _run_scheduler(contact, thread: dict) -> dict[str, Any]:
                 log.error("scheduler_send_failed", contact_id=contact.id, error=str(e))
 
     return scheduler_output
+
+
+async def handle_assistant_inquiry(
+    *,
+    thread_id: str,
+    incoming_message_id: str | None,
+    sender_email: str,
+    message: dict[str, Any],
+) -> None:
+    """Answer an internal query from an authorized sender.
+
+    Builds a system_snapshot (pipeline stats + recent activity + rate limit),
+    fetches the thread history from AgentMail, runs the Assistant agent,
+    and replies in the same thread (BCC'd to Andrew by the AgentMail client).
+    """
+    am = get_agentmail_client()
+
+    # Thread history (if AgentMail knows about it — new threads may be empty)
+    try:
+        thread = await am.get_thread(settings.AGENTMAIL_INBOX_ID, thread_id)
+    except Exception as e:
+        log.warning("assistant_thread_fetch_failed", error=str(e))
+        thread = {"thread_id": thread_id, "messages": []}
+
+    try:
+        snapshot = await build_system_snapshot()
+    except Exception as e:
+        log.warning("assistant_snapshot_failed", error=str(e))
+        snapshot = {"error": "snapshot_unavailable", "detail": str(e)}
+
+    user_payload = {
+        "sender": sender_email,
+        "message": {
+            "subject": message.get("subject"),
+            "text": message.get("text"),
+        },
+        "system_snapshot": snapshot,
+        "thread_history": thread.get("messages", []),
+    }
+
+    user_content = [
+        company_profile_content_block(settings.COMPANY_PROFILE_FILE_ID),
+        {
+            "type": "text",
+            "text": (
+                "An authorized internal user has sent you an email. Answer "
+                "their question using the company profile and the live system "
+                "snapshot below. Reply warmly and concisely.\n\n"
+                f"CONTEXT:\n{json.dumps(user_payload, indent=2, default=str)}"
+            ),
+        },
+    ]
+
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    try:
+        result = await run_agent_session(
+            client=client,
+            agent_id=settings.ASSISTANT_AGENT_ID,
+            environment_id=settings.ENVIRONMENT_ID,
+            vault_ids=[settings.VAULT_ID] if settings.VAULT_ID else None,
+            user_content=user_content,
+            contact_id=None,
+            agent_type="assistant",
+        )
+    except AgentSessionError as e:
+        log.error("assistant_session_failed", sender=sender_email, error=str(e))
+        return
+
+    parsed = result.parsed or {}
+    reply_text = parsed.get("reply_body_text") or ""
+    reply_html = parsed.get("reply_body_html") or f"<p>{reply_text}</p>"
+
+    if not reply_text:
+        log.warning("assistant_empty_reply", sender=sender_email)
+        return
+
+    if not incoming_message_id:
+        log.warning("assistant_reply_skipped_no_message_id", thread_id=thread_id)
+        return
+
+    try:
+        await am.reply(
+            inbox_id=settings.AGENTMAIL_INBOX_ID,
+            thread_id=thread_id,
+            in_reply_to_message_id=incoming_message_id,
+            subject=parsed.get("reply_subject")
+            or f"Re: {message.get('subject', '(no subject)')}",
+            text=reply_text,
+            html=reply_html,
+        )
+        log.info(
+            "assistant_reply_sent",
+            sender=sender_email,
+            thread_id=thread_id,
+            notes=parsed.get("notes"),
+        )
+    except Exception as e:
+        log.error(
+            "assistant_reply_send_failed",
+            sender=sender_email,
+            thread_id=thread_id,
+            error=str(e),
+        )
 
 
 async def handle_bounce(event_id: str, bounce: dict[str, Any]) -> None:

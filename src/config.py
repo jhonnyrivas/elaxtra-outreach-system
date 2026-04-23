@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     COMPOSER_MODEL: str = "claude-sonnet-4-6"
     RESPONDER_MODEL: str = "claude-sonnet-4-6"
     SCHEDULER_MODEL: str = "claude-sonnet-4-6"
+    ASSISTANT_MODEL: str = "claude-sonnet-4-6"
 
     # File paths
     CONTACTS_EXCEL_PATH: Path = Path("./data/contacts.xlsx")
@@ -89,10 +90,26 @@ class Settings(BaseSettings):
     RESPONDER_AGENT_VERSION: str = ""
     SCHEDULER_AGENT_ID: str = ""
     SCHEDULER_AGENT_VERSION: str = ""
+    ASSISTANT_AGENT_ID: str = ""
+    ASSISTANT_AGENT_VERSION: str = ""
     ENVIRONMENT_ID: str = ""
     VAULT_ID: str = ""
     COMPANY_PROFILE_FILE_ID: str = ""
     AGENTMAIL_INBOX_ID: str = ""
+
+    # Assistant — comma-separated list of email addresses allowed to query the
+    # internal assistant via email. Unknown senders that don't match an
+    # outreach thread are silently dropped (anti-spam).
+    ASSISTANT_ALLOWED_SENDERS: str = "andrew.burgert@elaxtra.com,jhonny.rivas@elaxtra.com"
+
+    @property
+    def assistant_allowed_senders(self) -> set[str]:
+        """Normalized lowercased set of allowed sender emails."""
+        return {
+            s.strip().lower()
+            for s in self.ASSISTANT_ALLOWED_SENDERS.split(",")
+            if s.strip()
+        }
 
     # Server
     WEBHOOK_HOST: str = "0.0.0.0"

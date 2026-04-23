@@ -140,7 +140,8 @@ class AgentSession(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "agent_type IN ('composer','responder','scheduler')", name="ck_agent_sessions_type"
+            "agent_type IN ('composer','responder','scheduler','assistant')",
+            name="ck_agent_sessions_type",
         ),
     )
 
