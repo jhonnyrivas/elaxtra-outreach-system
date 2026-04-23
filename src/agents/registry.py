@@ -129,8 +129,8 @@ async def _ensure_vault(client: anthropic.AsyncAnthropic) -> str:
             )
 
     vault = await client.beta.vaults.create(
-        name=VAULT_NAME,
-        description="MCP credentials for Elaxtra outreach agents",
+        display_name=VAULT_NAME,
+        metadata={"purpose": "MCP credentials for Elaxtra outreach agents"},
     )
     log.info("vault_created", vault_id=vault.id)
     return vault.id
@@ -148,9 +148,18 @@ async def _create_agent(
 async def _update_agent(
     client: anthropic.AsyncAnthropic, agent_id: str, config: dict
 ) -> tuple[str, str]:
-    """Update an existing agent (bumps the version)."""
-    # Agent update endpoint — POST /v1/agents/{id} — same body shape as create
-    agent = await client.beta.agents.update(agent_id=agent_id, **config)
+    """Update an existing agent (bumps the version).
+
+    The SDK's agents.update requires the current `version` to be passed
+    explicitly. We fetch the agent first to learn its current version,
+    then send the update.
+    """
+    current = await client.beta.agents.retrieve(agent_id=agent_id)
+    agent = await client.beta.agents.update(
+        agent_id=agent_id,
+        version=int(current.version),
+        **config,
+    )
     log.info(
         "agent_updated",
         name=config["name"],
