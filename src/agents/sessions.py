@@ -145,7 +145,11 @@ async def _run_agent_session_inner(
     error: str | None = None
 
     try:
-        async with client.beta.sessions.events.stream(session_id=session_id) as stream:
+        # In current anthropic SDK (>=0.96), `events.stream()` is `async def`
+        # and returns an AsyncStream; we must await the call before using it
+        # as an async context manager.
+        stream_cm = await client.beta.sessions.events.stream(session_id=session_id)
+        async with stream_cm as stream:
             # Now send the kickoff user message
             await client.beta.sessions.events.send(
                 session_id=session_id,

@@ -36,12 +36,14 @@ async def upload_company_profile(
 def company_profile_content_block(file_id: str) -> dict:
     """Build the document content block that every agent session gets.
 
-    Placing this at the start of the user message (before any per-request
-    data) lets Anthropic cache the PDF server-side across sessions.
+    Placed at the start of the user message (before any per-request data)
+    so every agent sees the PDF consistently. The Sessions API validates
+    content block fields strictly — no `cache_control` here (it's rejected
+    with "Extra inputs are not permitted"); caching is handled server-side
+    by Anthropic and is opaque to us.
     """
     return {
         "type": "document",
         "source": {"type": "file", "file_id": file_id},
         "title": "Elaxtra Advisors — Company Profile",
-        "cache_control": {"type": "ephemeral"},
     }
